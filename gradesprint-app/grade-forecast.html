@@ -840,8 +840,8 @@
         <a class="nav-link" href="#insights"><span>Insights</span><small>06</small></a>
       </nav>
       <div class="sidebar-card">
-        <span class="badge accent">Demo ready</span>
-        <p>Start with realistic sample classes, then edit every number to match your gradebook.</p>
+        <span class="badge accent">Start clean</span>
+        <p>Add your first class, then build the exact rubric from your real syllabus.</p>
       </div>
     </aside>
 
@@ -856,7 +856,7 @@
       <div class="topbar-actions">
         <button class="btn icon-btn" id="theme-toggle" type="button" aria-label="Toggle dark mode">◐</button>
         <button class="btn" id="export-csv" type="button">Export CSV</button>
-        <button class="btn" id="reset-demo" type="button">Reset demo</button>
+        <button class="btn" id="delete-class" type="button">Delete class</button>
       </div>
     </header>
 
@@ -878,7 +878,7 @@
             <div class="section-head">
               <div>
                 <h3>Class setup</h3>
-                <p>Fast defaults with every grading control editable.</p>
+                <p>Blank inputs keep every result tied to your real gradebook.</p>
               </div>
             </div>
             <div class="form-grid" id="class-form"></div>
@@ -911,6 +911,7 @@
             <div id="direct-mode" hidden>
               <div class="form-grid" id="direct-form"></div>
               <p class="hint" style="margin-top:12px;">Use direct mode when the gradebook only shows your current average and completed course weight.</p>
+              <div class="error" id="direct-error" role="status" aria-live="polite" style="margin-top:12px;"></div>
             </div>
           </div>
 
@@ -939,7 +940,7 @@
                 <input id="final-score" type="number" min="0" max="150" step="0.1">
               </div>
               <div class="field">
-                <label for="remaining-score">Missing assignment score</label>
+                <label for="remaining-score">Remaining assignment score</label>
                 <input id="remaining-score" type="number" min="0" max="150" step="0.1">
               </div>
               <div class="field">
@@ -961,8 +962,8 @@
           <aside class="panel panel-pad">
             <div class="section-head">
               <div>
-                <h3>Quick final scores</h3>
-                <p>Compare common exam outcomes.</p>
+                <h3>Projection check</h3>
+                <p>Uses only the scores you enter.</p>
               </div>
             </div>
             <div id="quick-scores"></div>
@@ -992,7 +993,7 @@
                 <label for="target-slider">Target course grade</label>
                 <input id="target-slider" type="range" min="50" max="100" step="0.5">
                 <div class="inline-row" style="justify-content:space-between;">
-                  <span class="hint">50</span><strong class="num" id="target-value">90%</strong><span class="hint">100</span>
+                  <span class="hint">50</span><strong class="num" id="target-value">--</strong><span class="hint">100</span>
                 </div>
               </div>
               <div class="field">
@@ -1007,8 +1008,9 @@
           <div class="section-head">
             <div>
               <h2 id="scenario-title">Scenario comparison</h2>
-              <p>See how different final scores and completion strategies move your outcome.</p>
+              <p>Create your own what-if rows from real scores you want to test.</p>
             </div>
+            <button class="btn small primary" id="add-scenario" type="button">Add scenario</button>
           </div>
           <div class="grid three" id="scenario-cards"></div>
         </section>
@@ -1061,117 +1063,60 @@
     "use strict";
 
     const $ = (selector, root = document) => root.querySelector(selector);
-    const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
     const clamp = (value, min = 0, max = 150) => Math.min(max, Math.max(min, Number.isFinite(value) ? value : 0));
     const pct = (value, digits = 1) => `${Number.isFinite(value) ? value.toFixed(digits) : "--"}%`;
     const id = () => Math.random().toString(36).slice(2, 9);
 
-    const sampleClasses = () => [
-      {
-        id: "business-stats",
-        name: "Business Statistics",
-        instructor: "Prof. Lee",
-        mode: "categories",
-        targetGrade: 90,
-        passingGrade: 70,
-        finalWeight: 25,
-        totalScale: 100,
-        missingAsZero: false,
-        direct: { currentGrade: 84.2, completedWeight: 75, finalWeight: 25 },
-        scenario: { finalScore: 86, remainingScore: 88, categoryBoost: 0, extraCredit: 0 },
-        letters: { A: 90, B: 80, C: 70, D: 60 },
-        categories: [
-          {
-            id: id(), name: "Homework", weight: 15, dropLowest: true,
-            assignments: [
-              { id: id(), name: "Problem Set 1", earned: 46, total: 50, status: "completed" },
-              { id: id(), name: "Problem Set 2", earned: 41, total: 50, status: "completed" },
-              { id: id(), name: "Problem Set 3", earned: 0, total: 50, status: "remaining" }
-            ]
-          },
-          {
-            id: id(), name: "Quizzes", weight: 15, dropLowest: true,
-            assignments: [
-              { id: id(), name: "Quiz 1", earned: 18, total: 20, status: "completed" },
-              { id: id(), name: "Quiz 2", earned: 15, total: 20, status: "completed" },
-              { id: id(), name: "Quiz 3", earned: 17, total: 20, status: "completed" }
-            ]
-          },
-          {
-            id: id(), name: "Projects", weight: 25, dropLowest: false,
-            assignments: [
-              { id: id(), name: "Regression Brief", earned: 88, total: 100, status: "completed" },
-              { id: id(), name: "Forecast Model", earned: 0, total: 100, status: "remaining" }
-            ]
-          },
-          {
-            id: id(), name: "Midterm", weight: 20, dropLowest: false,
-            assignments: [{ id: id(), name: "Midterm Exam", earned: 82, total: 100, status: "completed" }]
-          }
-        ]
-      },
-      {
-        id: "organic-chem",
-        name: "Organic Chemistry",
-        instructor: "Dr. Patel",
-        mode: "categories",
-        targetGrade: 80,
-        passingGrade: 65,
-        finalWeight: 30,
-        totalScale: 100,
-        missingAsZero: true,
-        direct: { currentGrade: 76.8, completedWeight: 70, finalWeight: 30 },
-        scenario: { finalScore: 82, remainingScore: 78, categoryBoost: 2, extraCredit: 1 },
-        letters: { A: 90, B: 80, C: 70, D: 60 },
-        categories: [
-          { id: id(), name: "Labs", weight: 20, dropLowest: false, assignments: [
-            { id: id(), name: "Synthesis Lab", earned: 92, total: 100, status: "completed" },
-            { id: id(), name: "Spectroscopy Lab", earned: 85, total: 100, status: "completed" }
-          ]},
-          { id: id(), name: "Problem Sets", weight: 15, dropLowest: true, assignments: [
-            { id: id(), name: "Mechanisms", earned: 34, total: 40, status: "completed" },
-            { id: id(), name: "Aromatics", earned: 28, total: 40, status: "completed" },
-            { id: id(), name: "Carbonyls", earned: 0, total: 40, status: "remaining" }
-          ]},
-          { id: id(), name: "Exams", weight: 35, dropLowest: false, assignments: [
-            { id: id(), name: "Exam 1", earned: 74, total: 100, status: "completed" },
-            { id: id(), name: "Exam 2", earned: 79, total: 100, status: "completed" }
-          ]}
-        ]
-      },
-      {
-        id: "world-history",
-        name: "World History",
-        instructor: "Morgan",
-        mode: "direct",
-        targetGrade: 85,
-        passingGrade: 70,
-        finalWeight: 20,
-        totalScale: 100,
-        missingAsZero: false,
-        direct: { currentGrade: 88.6, completedWeight: 80, finalWeight: 20 },
-        scenario: { finalScore: 80, remainingScore: 90, categoryBoost: 0, extraCredit: 0 },
-        letters: { A: 93, B: 85, C: 75, D: 65 },
-        categories: []
-      }
-    ];
-
     let state = {
-      classes: sampleClasses(),
-      selectedClassId: "business-stats",
+      classes: [],
+      selectedClassId: null,
       theme: "light"
     };
 
-    const getClass = () => state.classes.find(course => course.id === state.selectedClassId) || state.classes[0];
+    const getClass = () => state.classes.find(course => course.id === state.selectedClassId) || null;
+
+    const hasValue = value => value !== "" && value !== null && value !== undefined;
+    const numberOrNull = value => {
+      if (!hasValue(value)) return null;
+      const next = Number(value);
+      return Number.isFinite(next) ? next : null;
+    };
+    const inputValue = value => hasValue(value) ? escapeAttr(value) : "";
+    const displayClassName = course => course && course.name.trim() ? course.name.trim() : "Untitled class";
+
+    function createBlankCourse() {
+      return {
+        id: id(), name: "", instructor: "", mode: "categories",
+        targetGrade: "", passingGrade: "", finalWeight: "", totalScale: "100", missingAsZero: false,
+        direct: { currentGrade: "", completedWeight: "", finalWeight: "" },
+        scenario: { finalScore: "", remainingScore: "", categoryBoost: "", extraCredit: "" },
+        letters: { A: "", B: "", C: "", D: "" },
+        categories: [],
+        scenarios: []
+      };
+    }
+
+    function empty(message, action = "") {
+      return `<div class="empty"><div><strong>${escapeHtml(message)}</strong>${action ? `<p>${escapeHtml(action)}</p>` : ""}</div></div>`;
+    }
 
     function completedAssignments(category, missingAsZero, scenarioRemaining = null) {
       const rows = category.assignments.map(assignment => {
         const isRemaining = assignment.status !== "completed";
-        const earned = isRemaining
-          ? (missingAsZero ? 0 : (scenarioRemaining === null ? null : assignment.total * scenarioRemaining / 100))
-          : Number(assignment.earned);
-        return { ...assignment, earned, percentage: assignment.total > 0 && earned !== null ? earned / assignment.total * 100 : null };
-      }).filter(row => row.earned !== null && Number(row.total) > 0);
+        const remainingScore = numberOrNull(scenarioRemaining);
+        if (isRemaining && !missingAsZero && remainingScore === null) return { ...assignment, earned: null, total: null, percentage: null };
+        if (isRemaining) {
+          const percent = missingAsZero ? 0 : remainingScore;
+          return { ...assignment, earned: percent, total: 100, percentage: percent };
+        }
+        if (assignment.inputMode === "percent") {
+          const percent = numberOrNull(assignment.percent);
+          return { ...assignment, earned: percent, total: 100, percentage: percent };
+        }
+        const earned = numberOrNull(assignment.earned);
+        const total = numberOrNull(assignment.total);
+        return { ...assignment, earned, total, percentage: total > 0 && earned !== null ? earned / total * 100 : null };
+      }).filter(row => row.earned !== null && Number(row.total) > 0 && row.percentage !== null);
 
       if (category.dropLowest && rows.length > 1) {
         const lowest = rows.reduce((low, row) => row.percentage < low.percentage ? row : low, rows[0]);
@@ -1187,9 +1132,9 @@
         acc.total += Number(row.total) || 0;
         return acc;
       }, { earned: 0, total: 0 });
-      const rawScore = totals.total > 0 ? totals.earned / totals.total * 100 : 0;
+      const rawScore = totals.total > 0 ? totals.earned / totals.total * 100 : null;
       return {
-        score: clamp(rawScore + (options.categoryBoost || 0), 0, 150),
+        score: rawScore === null ? null : clamp(rawScore + (numberOrNull(options.categoryBoost) || 0), 0, 150),
         earned: totals.earned,
         total: totals.total,
         counted: rows.length,
@@ -1198,24 +1143,31 @@
     }
 
     function computeCourse(course, options = {}) {
-      const finalWeight = Number(course.finalWeight) || 0;
+      if (!course) return emptySummary();
+      const finalWeight = numberOrNull(course.finalWeight);
       const scenario = { ...course.scenario, ...options };
       if (course.mode === "direct") {
-        const completedWeight = Number(course.direct.completedWeight) || Math.max(0, 100 - finalWeight);
-        const currentGrade = Number(course.direct.currentGrade) || 0;
-        const finalExamWeight = Number(course.direct.finalWeight) || finalWeight;
-        const nonFinalContribution = currentGrade * (completedWeight / 100);
-        const projected = nonFinalContribution + (Number(scenario.finalScore) || 0) * (finalExamWeight / 100) + (Number(scenario.extraCredit) || 0);
+        const completedWeight = numberOrNull(course.direct.completedWeight);
+        const currentGrade = numberOrNull(course.direct.currentGrade);
+        const finalExamWeight = numberOrNull(course.direct.finalWeight);
+        const finalScore = numberOrNull(scenario.finalScore);
+        const extraCredit = numberOrNull(scenario.extraCredit) || 0;
+        const hasData = currentGrade !== null && completedWeight !== null;
+        const nonFinalContribution = hasData ? currentGrade * (completedWeight / 100) : null;
+        const projected = hasData && finalExamWeight !== null && finalScore !== null
+          ? nonFinalContribution + finalScore * (finalExamWeight / 100) + extraCredit
+          : null;
         return {
-          currentGrade,
-          projectedGrade: clamp(projected),
+          currentGrade: hasData ? currentGrade : null,
+          projectedGrade: projected === null ? null : clamp(projected),
           nonFinalContribution,
-          completedWeight,
-          finalWeight: finalExamWeight,
-          countedWeight: completedWeight + finalExamWeight,
+          completedWeight: completedWeight || 0,
+          finalWeight: finalExamWeight || 0,
+          countedWeight: (completedWeight || 0) + (finalExamWeight || 0),
           categoryBreakdown: [],
-          weightSum: completedWeight + finalExamWeight,
-          mode: "direct"
+          weightSum: (completedWeight || 0) + (finalExamWeight || 0),
+          mode: "direct",
+          hasData
         };
       }
 
@@ -1229,42 +1181,55 @@
           ...result,
           id: category.id,
           name: category.name,
-          weight: Number(category.weight) || 0,
-          contribution: result.score * ((Number(category.weight) || 0) / 100)
+          weight: numberOrNull(category.weight) || 0,
+          contribution: result.hasData ? result.score * ((numberOrNull(category.weight) || 0) / 100) : 0
         };
       });
       const completedWeight = categoryBreakdown
         .filter(item => item.hasData)
         .reduce((sum, item) => sum + item.weight, 0);
       const nonFinalContribution = categoryBreakdown.reduce((sum, item) => sum + item.contribution, 0);
-      const currentGrade = completedWeight > 0 ? nonFinalContribution / (completedWeight / 100) : 0;
+      const hasData = completedWeight > 0;
+      const currentGrade = hasData ? nonFinalContribution / (completedWeight / 100) : null;
       const projectedContribution = categoryBreakdown.reduce((sum, item) => sum + item.contribution, 0);
-      const projected = projectedContribution + (Number(scenario.finalScore) || 0) * (finalWeight / 100) + (Number(scenario.extraCredit) || 0);
+      const finalScore = numberOrNull(scenario.finalScore);
+      const extraCredit = numberOrNull(scenario.extraCredit) || 0;
+      const projected = hasData && finalWeight !== null && finalScore !== null
+        ? projectedContribution + finalScore * (finalWeight / 100) + extraCredit
+        : null;
       return {
-        currentGrade: clamp(currentGrade),
-        projectedGrade: clamp(projected),
-        nonFinalContribution,
+        currentGrade: currentGrade === null ? null : clamp(currentGrade),
+        projectedGrade: projected === null ? null : clamp(projected),
+        nonFinalContribution: hasData ? nonFinalContribution : null,
         completedWeight,
-        finalWeight,
-        countedWeight: completedWeight + finalWeight,
+        finalWeight: finalWeight || 0,
+        countedWeight: completedWeight + (finalWeight || 0),
         categoryBreakdown,
-        weightSum: course.categories.reduce((sum, item) => sum + (Number(item.weight) || 0), 0) + finalWeight,
-        mode: "categories"
+        weightSum: course.categories.reduce((sum, item) => sum + (numberOrNull(item.weight) || 0), 0) + (finalWeight || 0),
+        mode: "categories",
+        hasData
       };
     }
 
+    function emptySummary() {
+      return { currentGrade: null, projectedGrade: null, nonFinalContribution: null, completedWeight: 0, finalWeight: 0, countedWeight: 0, categoryBreakdown: [], weightSum: 0, mode: "categories", hasData: false };
+    }
+
     function requiredFinal(course, target) {
-      const current = computeCourse(course, { finalScore: 0, includeRemaining: false, extraCredit: 0, categoryBoost: 0 });
+      const targetValue = numberOrNull(target);
+      const current = computeCourse(course, { finalScore: "", includeRemaining: false, extraCredit: "", categoryBoost: "" });
+      if (targetValue === null || !current.hasData) return { needed: null, highest: null, current };
       const weight = current.finalWeight / 100;
       if (weight <= 0) {
-        return { needed: target <= current.nonFinalContribution ? 0 : Infinity, highest: current.nonFinalContribution, current };
+        return { needed: targetValue <= current.nonFinalContribution ? 0 : Infinity, highest: current.nonFinalContribution, current };
       }
-      const needed = (target - current.nonFinalContribution) / weight;
+      const needed = (targetValue - current.nonFinalContribution) / weight;
       const highest = current.nonFinalContribution + 100 * weight;
       return { needed, highest, current };
     }
 
     function statusForRequired(needed, highest, target) {
+      if (needed === null || needed === undefined) return { text: "Waiting", tone: "", note: "Enter real grades and final weight to calculate." };
       if (needed <= 0) return { text: "Guaranteed", tone: "good", note: "Already secure without the final." };
       if (needed <= 70) return { text: "Realistic", tone: "good", note: "A steady final gets it done." };
       if (needed <= 90) return { text: "Difficult", tone: "warn", note: "Needs a strong final performance." };
@@ -1273,14 +1238,17 @@
     }
 
     function letterFor(course, grade) {
-      const bands = Object.entries(course.letters).sort((a, b) => b[1] - a[1]);
+      if (!course || !Number.isFinite(grade)) return "--";
+      const bands = Object.entries(course.letters)
+        .map(([letter, cutoff]) => [letter, numberOrNull(cutoff)])
+        .filter(([, cutoff]) => cutoff !== null)
+        .sort((a, b) => b[1] - a[1]);
       const match = bands.find(([, cutoff]) => grade >= cutoff);
-      return match ? match[0] : "F";
+      return match ? match[0] : "--";
     }
 
     function render() {
       const course = getClass();
-      if (!course) return;
       document.documentElement.dataset.theme = state.theme;
       renderClassSelect(course);
       renderKpis(course);
@@ -1295,51 +1263,80 @@
     }
 
     function renderClassSelect(course) {
-      $("#class-select").innerHTML = state.classes.map(item => `<option value="${item.id}" ${item.id === course.id ? "selected" : ""}>${escapeHtml(item.name)}</option>`).join("");
-      $("#topbar-subtitle").textContent = course.instructor ? `${course.name} · ${course.instructor}` : course.name;
+      const select = $("#class-select");
+      if (!state.classes.length) {
+        select.innerHTML = '<option value="">No classes yet</option>';
+        select.disabled = true;
+        $("#topbar-subtitle").textContent = "Add your first class to calculate your real grade.";
+        $("#delete-class").disabled = true;
+        return;
+      }
+      select.disabled = false;
+      select.innerHTML = state.classes.map(item => `<option value="${item.id}" ${item.id === course.id ? "selected" : ""}>${escapeHtml(displayClassName(item))}</option>`).join("");
+      $("#topbar-subtitle").textContent = course.instructor ? `${displayClassName(course)} · ${course.instructor}` : displayClassName(course);
+      $("#delete-class").disabled = false;
     }
 
     function renderKpis(course) {
+      if (!course) {
+        $("#course-status").className = "badge";
+        $("#course-status").textContent = "No classes yet";
+        $("#kpi-grid").innerHTML = empty("No classes yet", "Add your first class to calculate your real grade.");
+        return;
+      }
       const base = computeCourse(course, { includeRemaining: false });
       const projection = computeCourse(course, { includeRemaining: true });
-      const pass = requiredFinal(course, Number(course.passingGrade));
-      const target = requiredFinal(course, Number(course.targetGrade));
+      const pass = requiredFinal(course, course.passingGrade);
+      const target = requiredFinal(course, course.targetGrade);
       const passStatus = statusForRequired(pass.needed, pass.highest, course.passingGrade);
       $("#course-status").className = `badge ${passStatus.tone}`;
-      $("#course-status").textContent = passStatus.text === "Impossible" ? "At Risk" : passStatus.text === "Guaranteed" ? "Safe" : "On Track";
+      $("#course-status").textContent = !base.hasData ? "Waiting" : passStatus.text === "Impossible" ? "At Risk" : passStatus.text === "Guaranteed" ? "Safe" : "On Track";
       $("#kpi-grid").innerHTML = [
-        kpi("Current grade", pct(base.currentGrade), `${letterFor(course, base.currentGrade)} standing across ${pct(base.completedWeight, 0)} completed weight.`, "accent"),
-        kpi("Projected final", pct(projection.projectedGrade), `${letterFor(course, projection.projectedGrade)} if scenarios hold.`, toneForGrade(course, projection.projectedGrade)),
-        kpi("Need to pass", formatNeeded(pass.needed), `${pct(course.passingGrade, 0)} pass threshold.`, passStatus.tone),
-        kpi("Need target", formatNeeded(target.needed), `${pct(course.targetGrade, 0)} target grade.`, statusForRequired(target.needed, target.highest, course.targetGrade).tone)
+        kpi("Current grade", pct(base.currentGrade), base.hasData ? `${letterFor(course, base.currentGrade)} standing across ${pct(base.completedWeight, 0)} completed weight.` : "Add scored assignments or direct gradebook values.", "accent"),
+        kpi("Projected final", pct(projection.projectedGrade), projection.projectedGrade !== null ? `${letterFor(course, projection.projectedGrade)} from entered projection values.` : "Enter a final score projection to see the outcome.", toneForGrade(course, projection.projectedGrade)),
+        kpi("Need to pass", formatNeeded(pass.needed), hasValue(course.passingGrade) ? `${pct(numberOrNull(course.passingGrade), 0)} pass threshold.` : "Set a passing grade first.", passStatus.tone),
+        kpi("Need target", formatNeeded(target.needed), hasValue(course.targetGrade) ? `${pct(numberOrNull(course.targetGrade), 0)} target grade.` : "Set a target grade first.", statusForRequired(target.needed, target.highest, course.targetGrade).tone)
       ].join("");
     }
 
     function kpi(label, value, note, tone) {
       return `<article class="kpi">
-        <div class="kpi-label"><span>${label}</span><span class="badge ${tone || ""}">${tone === "bad" ? "Risk" : tone === "warn" ? "Push" : "Live"}</span></div>
+        <div class="kpi-label"><span>${label}</span><span class="badge ${tone || ""}">${tone === "bad" ? "Risk" : tone === "warn" ? "Push" : value === "--" ? "Empty" : "Live"}</span></div>
         <div class="kpi-value">${value}</div>
         <div class="kpi-note">${note}</div>
       </article>`;
     }
 
     function renderClassForm(course) {
+      if (!course) {
+        $("#class-form").innerHTML = empty("No classes yet", "Use Add class to start with a blank calculator.");
+        return;
+      }
       const fields = [
-        ["name", "Class name", course.name, "text"],
-        ["instructor", "Instructor", course.instructor || "", "text"],
-        ["targetGrade", "Target grade", course.targetGrade, "number"],
-        ["passingGrade", "Pass grade", course.passingGrade, "number"],
-        ["finalWeight", "Final weight", course.finalWeight, "number"],
-        ["totalScale", "Grade scale", course.totalScale, "number"]
+        ["name", "Class name", course.name, "text", "Course name"],
+        ["instructor", "Instructor", course.instructor || "", "text", "Optional"],
+        ["targetGrade", "Target grade", course.targetGrade, "number", "0-150"],
+        ["passingGrade", "Pass grade", course.passingGrade, "number", "0-150"],
+        ["finalWeight", "Final weight", course.finalWeight, "number", "0-100"],
+        ["totalScale", "Grade scale", course.totalScale, "number", "Usually 100"]
       ];
-      $("#class-form").innerHTML = fields.map(([key, label, value, type]) => `
+      $("#class-form").innerHTML = fields.map(([key, label, value, type, placeholder]) => `
         <div class="field">
           <label for="course-${key}">${label}</label>
-          <input id="course-${key}" data-course-field="${key}" type="${type}" value="${escapeAttr(value)}" ${type === "number" ? 'step="0.1"' : ""}>
+          <input id="course-${key}" data-course-field="${key}" type="${type}" value="${inputValue(value)}" placeholder="${placeholder}" ${type === "number" ? 'step="0.1" min="0" max="150"' : ""}>
         </div>`).join("");
     }
 
     function renderModes(course) {
+      const disabled = !course;
+      ["#tab-categories", "#tab-direct", "#missing-zero", "#add-category"].forEach(selector => { $(selector).disabled = disabled; });
+      if (!course) {
+        $("#category-mode").hidden = false;
+        $("#direct-mode").hidden = true;
+        $("#categories").innerHTML = empty("No categories added", "Add your first class, then add a grading category to begin.");
+        $("#direct-form").innerHTML = empty("No class selected", "Create a class to enter direct gradebook values.");
+        return;
+      }
       const categoryMode = course.mode === "categories";
       $("#tab-categories").setAttribute("aria-selected", String(categoryMode));
       $("#tab-direct").setAttribute("aria-selected", String(!categoryMode));
@@ -1353,21 +1350,22 @@
     function renderCategories(course) {
       const root = $("#categories");
       if (!course.categories.length) {
-        root.innerHTML = `<div class="empty"><div><strong>No categories yet</strong><p>Add weighted categories from your syllabus, then add assignments inside each category.</p></div></div>`;
+        root.innerHTML = empty("No categories added", "Add a grading category to begin.");
         return;
       }
       root.innerHTML = course.categories.map(category => {
         const score = categoryScore(category, { missingAsZero: course.missingAsZero });
+        const issues = validateCategory(category);
         return `<article class="category-card" data-category-id="${category.id}">
           <div class="category-top">
             <div class="category-title field">
               <label for="cat-name-${category.id}">Category</label>
-              <input id="cat-name-${category.id}" data-category-field="name" type="text" value="${escapeAttr(category.name)}">
-              <span>${pct(score.score)} · ${score.counted} counted · ${score.earned.toFixed(1)}/${score.total.toFixed(1)} pts</span>
+              <input id="cat-name-${category.id}" data-category-field="name" type="text" value="${inputValue(category.name)}" placeholder="Category name">
+              <span>${score.hasData ? `${pct(score.score)} · ${score.counted} counted · ${score.earned.toFixed(1)}/${score.total.toFixed(1)} pts` : "No scored assignments yet"}</span>
             </div>
             <div class="field">
               <label for="cat-weight-${category.id}">Weight</label>
-              <input id="cat-weight-${category.id}" data-category-field="weight" type="number" step="0.1" value="${category.weight}">
+              <input id="cat-weight-${category.id}" data-category-field="weight" type="number" min="0" max="100" step="0.1" value="${inputValue(category.weight)}" placeholder="0-100">
             </div>
             <div class="switch-row">
               <input id="drop-${category.id}" data-category-field="dropLowest" type="checkbox" ${category.dropLowest ? "checked" : ""}>
@@ -1377,13 +1375,12 @@
               <button class="btn small" data-action="delete-category" type="button">Delete</button>
             </div>
           </div>
+          ${issues.length ? `<div class="error" style="padding:12px 14px 0;">${issues.map(escapeHtml).join(" ")}</div>` : ""}
           <div class="assignment-wrap">
-            <table class="assignment-table">
-              <thead><tr><th>Name</th><th>Earned</th><th>Total</th><th>Status</th><th>Percent</th><th></th></tr></thead>
-              <tbody>
-                ${category.assignments.map(assignment => assignmentRow(category.id, assignment)).join("")}
-              </tbody>
-            </table>
+            ${category.assignments.length ? `<table class="assignment-table">
+              <thead><tr><th>Name</th><th>Input</th><th>Earned</th><th>Total</th><th>Percent</th><th>Status</th><th></th></tr></thead>
+              <tbody>${category.assignments.map(assignment => assignmentRow(category.id, assignment)).join("")}</tbody>
+            </table>` : empty("No assignments yet", "Add an assignment row, then enter points or a percent.")}
           </div>
           <div class="table-actions">
             <button class="btn small primary" data-action="add-assignment" type="button">Add assignment</button>
@@ -1393,44 +1390,68 @@
     }
 
     function assignmentRow(categoryId, assignment) {
-      const percent = Number(assignment.total) > 0 ? Number(assignment.earned) / Number(assignment.total) * 100 : 0;
+      const percent = assignment.inputMode === "percent" ? numberOrNull(assignment.percent) : (numberOrNull(assignment.total) > 0 && numberOrNull(assignment.earned) !== null ? numberOrNull(assignment.earned) / numberOrNull(assignment.total) * 100 : null);
+      const issues = validateAssignment(assignment);
       return `<tr data-category-id="${categoryId}" data-assignment-id="${assignment.id}">
-        <td><input aria-label="Assignment name" data-assignment-field="name" type="text" value="${escapeAttr(assignment.name)}"></td>
-        <td><input aria-label="Earned points" data-assignment-field="earned" type="number" step="0.1" value="${assignment.earned}"></td>
-        <td><input aria-label="Total points" data-assignment-field="total" type="number" step="0.1" value="${assignment.total}"></td>
+        <td><input aria-label="Assignment name" data-assignment-field="name" type="text" value="${inputValue(assignment.name)}" placeholder="Assignment"></td>
+        <td><select aria-label="Input method" data-assignment-field="inputMode">
+          <option value="points" ${assignment.inputMode !== "percent" ? "selected" : ""}>Points</option>
+          <option value="percent" ${assignment.inputMode === "percent" ? "selected" : ""}>Percent</option>
+        </select></td>
+        <td><input aria-label="Earned points" data-assignment-field="earned" type="number" min="0" step="0.1" value="${inputValue(assignment.earned)}" placeholder="Earned" ${assignment.inputMode === "percent" ? "disabled" : ""}></td>
+        <td><input aria-label="Total points" data-assignment-field="total" type="number" min="0" step="0.1" value="${inputValue(assignment.total)}" placeholder="Total" ${assignment.inputMode === "percent" ? "disabled" : ""}></td>
+        <td><input aria-label="Assignment percent" data-assignment-field="percent" type="number" min="0" max="150" step="0.1" value="${inputValue(assignment.percent)}" placeholder="%" ${assignment.inputMode === "percent" ? "" : "disabled"}><div class="hint num">${pct(percent)}</div>${issues.length ? `<div class="error">${issues.map(escapeHtml).join(" ")}</div>` : ""}</td>
         <td><select aria-label="Due status" data-assignment-field="status">
           <option value="completed" ${assignment.status === "completed" ? "selected" : ""}>Completed</option>
           <option value="remaining" ${assignment.status === "remaining" ? "selected" : ""}>Remaining</option>
           <option value="missing" ${assignment.status === "missing" ? "selected" : ""}>Missing</option>
         </select></td>
-        <td class="num">${pct(percent)}</td>
         <td><button class="btn small" data-action="delete-assignment" type="button">Remove</button></td>
       </tr>`;
     }
 
     function renderDirectForm(course) {
       const fields = [
-        ["currentGrade", "Current overall grade", course.direct.currentGrade],
-        ["completedWeight", "Completed weight", course.direct.completedWeight],
-        ["finalWeight", "Final exam weight", course.direct.finalWeight]
+        ["currentGrade", "Current overall grade", course.direct.currentGrade, "0-150"],
+        ["completedWeight", "Completed weight", course.direct.completedWeight, "0-100"],
+        ["finalWeight", "Final exam weight", course.direct.finalWeight, "0-100"]
       ];
-      $("#direct-form").innerHTML = fields.map(([key, label, value]) => `
+      $("#direct-form").innerHTML = fields.map(([key, label, value, placeholder]) => `
         <div class="field">
           <label for="direct-${key}">${label}</label>
-          <input id="direct-${key}" data-direct-field="${key}" type="number" step="0.1" value="${value}">
-        </div>`).join("");
+          <input id="direct-${key}" data-direct-field="${key}" type="number" min="0" max="150" step="0.1" value="${inputValue(value)}" placeholder="${placeholder}">
+        </div>`).join("") + validationBlock(validateDirect(course));
     }
 
     function renderLetters(course) {
+      if (!course) {
+        $("#letter-form").innerHTML = empty("No grading bands", "Create a class to enter letter cutoffs.");
+        $("#target-letter").innerHTML = '<option value="">No bands yet</option>';
+        $("#target-letter").disabled = true;
+        return;
+      }
       $("#letter-form").innerHTML = Object.entries(course.letters).map(([letter, value]) => `
         <div class="field">
           <label for="letter-${letter}">${letter} cutoff</label>
-          <input id="letter-${letter}" data-letter="${letter}" type="number" step="0.1" value="${value}">
+          <input id="letter-${letter}" data-letter="${letter}" type="number" min="0" max="150" step="0.1" value="${inputValue(value)}" placeholder="${letter} %">
         </div>`).join("");
-      $("#target-letter").innerHTML = Object.entries(course.letters).map(([letter, value]) => `<option value="${value}" ${Number(course.targetGrade) === Number(value) ? "selected" : ""}>Target ${letter} (${pct(value, 0)})</option>`).join("");
+      const bands = Object.entries(course.letters).filter(([, value]) => numberOrNull(value) !== null);
+      $("#target-letter").disabled = !bands.length;
+      $("#target-letter").innerHTML = bands.length
+        ? '<option value="">Choose letter</option>' + bands.map(([letter, value]) => `<option value="${value}" ${Number(course.targetGrade) === Number(value) ? "selected" : ""}>Target ${letter} (${pct(Number(value), 0)})</option>`).join("")
+        : '<option value="">Enter cutoffs first</option>';
     }
 
     function renderProjection(course) {
+      ["final-score", "remaining-score", "category-boost", "extra-credit"].forEach(inputId => { $(`#${inputId}`).disabled = !course; });
+      if (!course) {
+        ["final-score", "remaining-score", "category-boost", "extra-credit"].forEach(inputId => { $(`#${inputId}`).value = ""; });
+        $("#projected-grade").textContent = "--";
+        $("#projected-bar").style.width = "0%";
+        $("#projection-note").textContent = "Add a class and real grades to project an outcome.";
+        $("#quick-scores").innerHTML = empty("No projection yet", "Enter a final score projection to calculate a result.");
+        return;
+      }
       const scenario = course.scenario;
       $("#final-score").value = scenario.finalScore;
       $("#remaining-score").value = scenario.remainingScore;
@@ -1438,105 +1459,175 @@
       $("#extra-credit").value = scenario.extraCredit;
       const projected = computeCourse(course, { includeRemaining: true });
       $("#projected-grade").textContent = pct(projected.projectedGrade);
-      $("#projected-bar").style.width = `${Math.min(100, projected.projectedGrade)}%`;
+      $("#projected-bar").style.width = `${Math.min(100, projected.projectedGrade || 0)}%`;
       $("#projected-bar").className = `progress-fill ${toneForGrade(course, projected.projectedGrade)}`;
-      $("#projection-note").textContent = `Projected ${letterFor(course, projected.projectedGrade)} with a ${pct(scenario.finalScore)} final, ${pct(scenario.remainingScore)} on remaining work, and ${pct(scenario.extraCredit)} bonus.`;
-      $("#quick-scores").innerHTML = [70, 80, 90, 100].map(score => {
-        const result = computeCourse(course, { includeRemaining: true, finalScore: score });
-        return `<div class="scenario-row">
-          <strong class="num">${score}%</strong>
-          <div class="progress-track"><div class="progress-fill ${toneForGrade(course, result.projectedGrade)}" style="width:${Math.min(100, result.projectedGrade)}%"></div></div>
-          <span class="num">${pct(result.projectedGrade)}</span>
-        </div>`;
-      }).join("");
+      $("#projection-note").textContent = projected.projectedGrade !== null
+        ? `Projected ${letterFor(course, projected.projectedGrade)} from your entered final, remaining-work, and bonus values.`
+        : "Enter a final exam score projection after adding real grade data.";
+      $("#quick-scores").innerHTML = projected.projectedGrade !== null
+        ? `<div class="scenario-row"><strong class="num">Entered</strong><div class="progress-track"><div class="progress-fill ${toneForGrade(course, projected.projectedGrade)}" style="width:${Math.min(100, projected.projectedGrade)}%"></div></div><span class="num">${pct(projected.projectedGrade)}</span></div>`
+        : empty("No projection yet", "Enter your expected final score to calculate a result.");
     }
 
     function renderFinalNeeded(course) {
-      const pass = requiredFinal(course, Number(course.passingGrade));
-      const target = requiredFinal(course, Number(course.targetGrade));
+      if (!course) {
+        $("#final-results").innerHTML = empty("No final calculation yet", "Add a class and final exam weight to see what score you need.");
+        $("#target-slider").disabled = true;
+        $("#target-slider").value = 50;
+        $("#target-value").textContent = "--";
+        return;
+      }
+      const pass = requiredFinal(course, course.passingGrade);
+      const target = requiredFinal(course, course.targetGrade);
       const passStatus = statusForRequired(pass.needed, pass.highest, course.passingGrade);
       const targetStatus = statusForRequired(target.needed, target.highest, course.targetGrade);
       $("#final-results").innerHTML = [
         finalCard("Pass the class", course.passingGrade, pass, passStatus),
-        finalCard(`Reach ${pct(course.targetGrade, 0)}`, course.targetGrade, target, targetStatus)
+        finalCard(hasValue(course.targetGrade) ? `Reach ${pct(numberOrNull(course.targetGrade), 0)}` : "Reach target", course.targetGrade, target, targetStatus)
       ].join("");
-      $("#target-slider").value = course.targetGrade;
-      $("#target-value").textContent = pct(course.targetGrade);
+      $("#target-slider").disabled = false;
+      $("#target-slider").value = numberOrNull(course.targetGrade) ?? 50;
+      $("#target-value").textContent = pct(numberOrNull(course.targetGrade));
     }
 
     function finalCard(title, target, result, status) {
       return `<article class="result-card">
         <div class="inline-row" style="justify-content:space-between;">
-          <span class="label">${title}</span>
+          <span class="label">${escapeHtml(title)}</span>
           <span class="badge ${status.tone}">${status.text}</span>
         </div>
         <div class="result-number">${formatNeeded(result.needed)}</div>
-        <p class="hint">${status.note} Target: ${pct(target)}. Highest with 100 final: ${pct(result.highest)}.</p>
+        <p class="hint">${escapeHtml(status.note)} ${hasValue(target) ? `Target: ${pct(numberOrNull(target))}.` : "Set a target threshold."} ${result.highest !== null ? `Highest with 100 final: ${pct(result.highest)}.` : ""}</p>
       </article>`;
     }
 
     function renderScenarios(course) {
-      const scenarios = [
-        { name: "Conservative", finalScore: 70, remainingScore: 75, categoryBoost: 0, extraCredit: 0 },
-        { name: "Focused push", finalScore: 85, remainingScore: 88, categoryBoost: 2, extraCredit: course.scenario.extraCredit },
-        { name: "Perfect final", finalScore: 100, remainingScore: 95, categoryBoost: 4, extraCredit: course.scenario.extraCredit }
-      ];
-      $("#scenario-cards").innerHTML = scenarios.map(item => {
+      $("#add-scenario").disabled = !course;
+      if (!course) {
+        $("#scenario-cards").innerHTML = empty("No scenarios yet", "Create a class, then add what-if rows from real scores you want to test.");
+        return;
+      }
+      if (!course.scenarios.length) {
+        $("#scenario-cards").innerHTML = empty("No scenarios yet", "Add a scenario to compare final and remaining-work scores.");
+        return;
+      }
+      $("#scenario-cards").innerHTML = course.scenarios.map(item => {
         const result = computeCourse(course, { ...item, includeRemaining: true });
-        const pass = result.projectedGrade >= Number(course.passingGrade);
-        const target = result.projectedGrade >= Number(course.targetGrade);
-        return `<article class="result-card">
+        const passValue = numberOrNull(course.passingGrade);
+        const targetValue = numberOrNull(course.targetGrade);
+        const passes = result.projectedGrade !== null && passValue !== null && result.projectedGrade >= passValue;
+        const hitsTarget = result.projectedGrade !== null && targetValue !== null && result.projectedGrade >= targetValue;
+        return `<article class="result-card" data-scenario-id="${item.id}">
           <div class="inline-row" style="justify-content:space-between;">
-            <strong>${item.name}</strong>
-            <span class="badge ${target ? "good" : pass ? "warn" : "bad"}">${target ? "Target hit" : pass ? "Safe to pass" : "At risk"}</span>
+            <input aria-label="Scenario name" data-scenario-field="name" type="text" value="${inputValue(item.name)}" placeholder="Scenario name">
+            <span class="badge ${hitsTarget ? "good" : passes ? "warn" : result.projectedGrade === null ? "" : "bad"}">${result.projectedGrade === null ? "Waiting" : hitsTarget ? "Target hit" : passes ? "Safe to pass" : "At risk"}</span>
+          </div>
+          <div class="form-grid" style="grid-template-columns:repeat(2,minmax(0,1fr));">
+            <div class="field"><label>Final score</label><input data-scenario-field="finalScore" type="number" min="0" max="150" step="0.1" value="${inputValue(item.finalScore)}" placeholder="%"></div>
+            <div class="field"><label>Remaining score</label><input data-scenario-field="remainingScore" type="number" min="0" max="150" step="0.1" value="${inputValue(item.remainingScore)}" placeholder="%"></div>
+            <div class="field"><label>Category boost</label><input data-scenario-field="categoryBoost" type="number" min="0" max="30" step="0.1" value="${inputValue(item.categoryBoost)}" placeholder="0"></div>
+            <div class="field"><label>Bonus %</label><input data-scenario-field="extraCredit" type="number" min="0" max="20" step="0.1" value="${inputValue(item.extraCredit)}" placeholder="0"></div>
           </div>
           <div class="result-number small">${pct(result.projectedGrade)}</div>
-          <div class="progress-track"><div class="progress-fill ${toneForGrade(course, result.projectedGrade)}" style="width:${Math.min(100, result.projectedGrade)}%"></div></div>
-          <p class="hint">${pct(item.finalScore, 0)} final · ${pct(item.remainingScore, 0)} remaining work · ${pct(item.categoryBoost, 0)} category boost</p>
+          <div class="progress-track"><div class="progress-fill ${toneForGrade(course, result.projectedGrade)}" style="width:${Math.min(100, result.projectedGrade || 0)}%"></div></div>
+          <button class="btn small" data-action="delete-scenario" type="button">Remove scenario</button>
         </article>`;
       }).join("");
     }
 
     function renderInsights(course) {
-      const pass = requiredFinal(course, Number(course.passingGrade));
-      const target = requiredFinal(course, Number(course.targetGrade));
+      if (!course) {
+        $("#insight-list").innerHTML = `<li>Add your first class to unlock real grade insights.</li>`;
+        $("#impact-list").innerHTML = empty("No category impact yet", "Add weighted categories to see what matters most.");
+        return;
+      }
+      const pass = requiredFinal(course, course.passingGrade);
+      const target = requiredFinal(course, course.targetGrade);
       const base = computeCourse(course);
-      const targetStatus = statusForRequired(target.needed, target.highest, course.targetGrade);
-      const impact = base.categoryBreakdown.slice().sort((a, b) => b.weight - a.weight)[0];
-      const insights = [
-        pass.needed <= 0 ? "You are already safe to pass if the syllabus weights hold." : `You need ${formatNeeded(pass.needed)} on the final to pass.`,
-        target.needed > 100 ? `Even with a 100 on the final, your highest possible course grade is ${pct(target.highest)}.` : `To finish with ${pct(course.targetGrade, 0)}, you need at least ${formatNeeded(target.needed)} on the final.`,
-        impact ? `${impact.name} has the biggest rubric weight at ${pct(impact.weight, 0)}.` : "Direct mode is active, so the forecast uses your summary gradebook values.",
-        targetStatus.text === "Difficult" || targetStatus.text === "High push" ? "Your target is still possible, but the final carries the sprint." : "Your plan is mathematically clear; adjust scenarios to choose the safest path."
-      ];
+      const impact = base.categoryBreakdown.filter(item => item.weight > 0).sort((a, b) => b.weight - a.weight)[0];
+      const insights = [];
+      if (!base.hasData) insights.push("Enter scored assignments or direct gradebook values to calculate your standing.");
+      else insights.push(pass.needed === null ? "Set a passing grade and final weight to calculate the final score needed." : pass.needed <= 0 ? "You are already safe to pass if the syllabus weights hold." : `You need ${formatNeeded(pass.needed)} on the final to pass.`);
+      insights.push(target.needed === null ? "Set a target grade to calculate the final score required." : target.needed > 100 ? `Even with a 100 on the final, your highest possible course grade is ${pct(target.highest)}.` : `To finish with ${pct(numberOrNull(course.targetGrade), 0)}, you need at least ${formatNeeded(target.needed)} on the final.`);
+      insights.push(impact ? `${impact.name || "Unnamed category"} has the biggest rubric weight at ${pct(impact.weight, 0)}.` : "Add category weights to reveal the highest-impact area.");
       $("#insight-list").innerHTML = insights.map(text => `<li>${escapeHtml(text)}</li>`).join("");
       $("#impact-list").innerHTML = base.categoryBreakdown.length
-        ? base.categoryBreakdown.map(item => `<div class="scenario-row">
-            <strong>${escapeHtml(item.name)}</strong>
-            <div class="progress-track"><div class="progress-fill" style="width:${Math.min(100, item.weight)}%"></div></div>
-            <span class="num">${pct(item.weight, 0)}</span>
-          </div>`).join("")
-        : `<div class="empty"><div><strong>Direct mode</strong><p>Switch to category mode to see category impact by weight.</p></div></div>`;
+        ? base.categoryBreakdown.map(item => `<div class="scenario-row"><strong>${escapeHtml(item.name || "Unnamed")}</strong><div class="progress-track"><div class="progress-fill" style="width:${Math.min(100, item.weight)}%"></div></div><span class="num">${pct(item.weight, 0)}</span></div>`).join("")
+        : empty("No category impact yet", "Add weighted categories to see what matters most.");
     }
 
     function renderWeightError(course) {
+      if (!course) {
+        $("#weight-error").textContent = "";
+        return;
+      }
       const summary = computeCourse(course);
-      const delta = Math.abs(summary.weightSum - 100);
-      $("#weight-error").textContent = delta > 0.25
-        ? `Weights currently total ${pct(summary.weightSum)}. Aim for 100% including the final exam.`
-        : "";
+      const messages = validateCourse(course);
+      messages.unshift(`Weights currently total ${pct(summary.weightSum)} including the final exam.`);
+      if (Math.abs(summary.weightSum - 100) <= 0.25) messages[0] += " Good: the model balances to 100%.";
+      else messages[0] += " Aim for 100%.";
+      $("#weight-error").textContent = messages.join(" ");
     }
 
     function toneForGrade(course, grade) {
-      if (grade >= Number(course.targetGrade)) return "good";
-      if (grade >= Number(course.passingGrade)) return "warn";
+      if (!course || grade === null || !Number.isFinite(grade)) return "";
+      const target = numberOrNull(course.targetGrade);
+      const passing = numberOrNull(course.passingGrade);
+      if (target !== null && grade >= target) return "good";
+      if (passing !== null && grade >= passing) return "warn";
       return "bad";
     }
 
     function formatNeeded(value) {
+      if (value === null || value === undefined) return "--";
       if (value === Infinity) return "Impossible";
       if (value <= 0) return "0%";
       return pct(value);
+    }
+
+    function validationBlock(messages) {
+      return messages.length ? `<div class="error" style="grid-column:1/-1;">${messages.map(escapeHtml).join(" ")}</div>` : "";
+    }
+
+    function validateRange(label, value, min, max) {
+      if (!hasValue(value)) return [];
+      const num = Number(value);
+      if (!Number.isFinite(num)) return [`${label} must be numeric.`];
+      if (num < min || num > max) return [`${label} must be between ${min} and ${max}.`];
+      return [];
+    }
+
+    function validateCourse(course) {
+      return [
+        ...validateRange("Passing grade", course.passingGrade, 0, 150),
+        ...validateRange("Target grade", course.targetGrade, 0, 150),
+        ...validateRange("Final weight", course.mode === "direct" ? course.direct.finalWeight : course.finalWeight, 0, 100),
+        ...validateRange("Grade scale", course.totalScale, 1, 150)
+      ];
+    }
+
+    function validateDirect(course) {
+      return [
+        ...validateRange("Current overall grade", course.direct.currentGrade, 0, 150),
+        ...validateRange("Completed weight", course.direct.completedWeight, 0, 100),
+        ...validateRange("Final exam weight", course.direct.finalWeight, 0, 100)
+      ];
+    }
+
+    function validateCategory(category) {
+      return validateRange("Category weight", category.weight, 0, 100);
+    }
+
+    function validateAssignment(assignment) {
+      const messages = [];
+      if (assignment.inputMode === "percent") return validateRange("Percent", assignment.percent, 0, 150);
+      messages.push(...validateRange("Earned points", assignment.earned, 0, 100000));
+      messages.push(...validateRange("Total points", assignment.total, 0, 100000));
+      const earned = numberOrNull(assignment.earned);
+      const total = numberOrNull(assignment.total);
+      if (earned !== null && total !== null && total > 0 && earned > total) messages.push("Earned points cannot exceed total points.");
+      if (total !== null && total === 0) messages.push("Total points must be greater than zero.");
+      return messages;
     }
 
     function updateNested(root, selector, callback) {
@@ -1556,40 +1647,44 @@
 
     function bindEvents() {
       $("#class-select").addEventListener("change", event => {
-        state.selectedClassId = event.target.value;
+        state.selectedClassId = event.target.value || null;
         render();
       });
       $("#theme-toggle").addEventListener("click", () => {
         state.theme = state.theme === "dark" ? "light" : "dark";
         render();
       });
-      $("#reset-demo").addEventListener("click", () => {
-        state.classes = sampleClasses();
-        state.selectedClassId = "business-stats";
+      $("#delete-class").addEventListener("click", () => {
+        const course = getClass();
+        if (!course) return;
+        state.classes = state.classes.filter(item => item.id !== course.id);
+        state.selectedClassId = state.classes[0]?.id || null;
         render();
       });
       $("#add-class").addEventListener("click", () => {
-        const course = {
-          id: id(), name: `New Class ${state.classes.length + 1}`, instructor: "", mode: "categories",
-          targetGrade: 90, passingGrade: 70, finalWeight: 25, totalScale: 100, missingAsZero: false,
-          direct: { currentGrade: 85, completedWeight: 75, finalWeight: 25 },
-          scenario: { finalScore: 85, remainingScore: 85, categoryBoost: 0, extraCredit: 0 },
-          letters: { A: 90, B: 80, C: 70, D: 60 },
-          categories: [{ id: id(), name: "Coursework", weight: 75, dropLowest: false, assignments: [{ id: id(), name: "Assignment 1", earned: 85, total: 100, status: "completed" }] }]
-        };
+        const course = createBlankCourse();
         state.classes.push(course);
         state.selectedClassId = course.id;
         render();
+        setTimeout(() => $("#course-name")?.focus(), 0);
       });
-      $("#tab-categories").addEventListener("click", () => { getClass().mode = "categories"; render(); });
-      $("#tab-direct").addEventListener("click", () => { getClass().mode = "direct"; render(); });
-      $("#missing-zero").addEventListener("change", event => { getClass().missingAsZero = event.target.checked; render(); });
+      $("#tab-categories").addEventListener("click", () => { const course = getClass(); if (course) { course.mode = "categories"; render(); } });
+      $("#tab-direct").addEventListener("click", () => { const course = getClass(); if (course) { course.mode = "direct"; render(); } });
+      $("#missing-zero").addEventListener("change", event => { const course = getClass(); if (course) { course.missingAsZero = event.target.checked; render(); } });
       $("#add-category").addEventListener("click", () => {
-        getClass().categories.push({ id: id(), name: "New Category", weight: 10, dropLowest: false, assignments: [] });
+        const course = getClass();
+        if (!course) return;
+        course.categories.push({ id: id(), name: "", weight: "", dropLowest: false, assignments: [] });
         render();
       });
-      $("#target-slider").addEventListener("input", event => { getClass().targetGrade = Number(event.target.value); render(); });
-      $("#target-letter").addEventListener("change", event => { getClass().targetGrade = Number(event.target.value); render(); });
+      $("#add-scenario").addEventListener("click", () => {
+        const course = getClass();
+        if (!course) return;
+        course.scenarios.push({ id: id(), name: "", finalScore: "", remainingScore: "", categoryBoost: "", extraCredit: "" });
+        render();
+      });
+      $("#target-slider").addEventListener("input", event => { const course = getClass(); if (course) { course.targetGrade = event.target.value; render(); } });
+      $("#target-letter").addEventListener("change", event => { const course = getClass(); if (course && event.target.value !== "") { course.targetGrade = event.target.value; render(); } });
       $("#export-csv").addEventListener("click", exportCsv);
       $("#open-help").addEventListener("click", openHelp);
       $("#hero-help").addEventListener("click", openHelp);
@@ -1600,22 +1695,29 @@
       $("#nav-links").addEventListener("click", closeMenu);
 
       updateNested(document, "[data-course-field]", event => {
-        const key = event.target.dataset.courseField;
         const course = getClass();
-        course[key] = ["targetGrade", "passingGrade", "finalWeight", "totalScale"].includes(key) ? Number(event.target.value) : event.target.value;
-        if (key === "finalWeight") course.direct.finalWeight = Number(event.target.value);
+        if (!course) return false;
+        const key = event.target.dataset.courseField;
+        course[key] = event.target.value;
+        if (key === "finalWeight" && !hasValue(course.direct.finalWeight)) course.direct.finalWeight = event.target.value;
         return event.type !== "input" || event.target.type === "number";
       });
       updateNested(document, "[data-direct-field]", event => {
-        getClass().direct[event.target.dataset.directField] = Number(event.target.value);
+        const course = getClass();
+        if (!course) return false;
+        course.direct[event.target.dataset.directField] = event.target.value;
       });
       updateNested(document, "[data-letter]", event => {
-        getClass().letters[event.target.dataset.letter] = Number(event.target.value);
+        const course = getClass();
+        if (!course) return false;
+        course.letters[event.target.dataset.letter] = event.target.value;
       });
       ["final-score", "remaining-score", "category-boost", "extra-credit"].forEach(inputId => {
         $(`#${inputId}`).addEventListener("input", event => {
+          const course = getClass();
+          if (!course) return;
           const key = inputId.replace(/-([a-z])/g, (_, char) => char.toUpperCase());
-          getClass().scenario[key] = Number(event.target.value);
+          course.scenario[key] = event.target.value;
           render();
         });
       });
@@ -1623,6 +1725,9 @@
       $("#categories").addEventListener("change", handleCategoryInput);
       $("#categories").addEventListener("focusout", handleCategoryInput);
       $("#categories").addEventListener("click", handleCategoryAction);
+      $("#scenario-cards").addEventListener("input", handleScenarioInput);
+      $("#scenario-cards").addEventListener("change", handleScenarioInput);
+      $("#scenario-cards").addEventListener("click", handleScenarioAction);
       document.addEventListener("keydown", event => {
         if (event.key === "Escape") {
           closeHelp();
@@ -1634,20 +1739,24 @@
     function handleCategoryInput(event) {
       const course = getClass();
       const card = event.target.closest("[data-category-id]");
-      if (!card) return;
+      if (!course || !card) return;
       const category = course.categories.find(item => item.id === card.dataset.categoryId);
       if (!category) return;
       let shouldRender = false;
       if (event.target.matches("[data-category-field]")) {
         const field = event.target.dataset.categoryField;
-        category[field] = field === "dropLowest" ? event.target.checked : field === "name" ? event.target.value : Number(event.target.value);
+        category[field] = field === "dropLowest" ? event.target.checked : event.target.value;
         shouldRender = event.type !== "input" || field !== "name";
       }
       if (event.target.matches("[data-assignment-field]")) {
         const row = event.target.closest("[data-assignment-id]");
         const assignment = category.assignments.find(item => item.id === row.dataset.assignmentId);
         const field = event.target.dataset.assignmentField;
-        assignment[field] = ["earned", "total"].includes(field) ? Number(event.target.value) : event.target.value;
+        assignment[field] = event.target.value;
+        if (field === "inputMode") {
+          if (assignment.inputMode === "percent") { assignment.earned = ""; assignment.total = ""; }
+          else { assignment.percent = ""; }
+        }
         shouldRender = event.type !== "input" || field !== "name";
       }
       if (shouldRender) render();
@@ -1658,11 +1767,11 @@
       if (!button) return;
       const course = getClass();
       const card = button.closest("[data-category-id]");
-      const category = card ? course.categories.find(item => item.id === card.dataset.categoryId) : null;
-      if (!category) return;
+      const category = course && card ? course.categories.find(item => item.id === card.dataset.categoryId) : null;
+      if (!course || !category) return;
       const action = button.dataset.action;
       if (action === "add-assignment") {
-        category.assignments.push({ id: id(), name: "New assignment", earned: 0, total: 100, status: "remaining" });
+        category.assignments.push({ id: id(), name: "", inputMode: "points", earned: "", total: "", percent: "", status: "completed" });
       }
       if (action === "delete-category") {
         course.categories = course.categories.filter(item => item.id !== category.id);
@@ -1674,17 +1783,37 @@
       render();
     }
 
+    function handleScenarioInput(event) {
+      const course = getClass();
+      const card = event.target.closest("[data-scenario-id]");
+      if (!course || !card || !event.target.matches("[data-scenario-field]")) return;
+      const scenario = course.scenarios.find(item => item.id === card.dataset.scenarioId);
+      if (!scenario) return;
+      const field = event.target.dataset.scenarioField;
+      scenario[field] = event.target.value;
+      if (event.type !== "input" || field !== "name") render();
+    }
+
+    function handleScenarioAction(event) {
+      const button = event.target.closest("[data-action='delete-scenario']");
+      const course = getClass();
+      if (!button || !course) return;
+      const card = button.closest("[data-scenario-id]");
+      course.scenarios = course.scenarios.filter(item => item.id !== card.dataset.scenarioId);
+      render();
+    }
+
     function exportCsv() {
       const rows = [["Class", "Current Grade", "Projected Grade", "Pass Need", "Target Need", "Mode"]];
       state.classes.forEach(course => {
         const current = computeCourse(course);
         const projected = computeCourse(course, { includeRemaining: true });
         rows.push([
-          course.name,
-          current.currentGrade.toFixed(2),
-          projected.projectedGrade.toFixed(2),
-          formatNeeded(requiredFinal(course, course.passingGrade).needed),
-          formatNeeded(requiredFinal(course, course.targetGrade).needed),
+          displayClassName(course),
+          current.currentGrade === null ? "" : current.currentGrade.toFixed(2),
+          projected.projectedGrade === null ? "" : projected.projectedGrade.toFixed(2),
+          formatNeeded(requiredFinal(course, course.passingGrade).needed).replace("--", ""),
+          formatNeeded(requiredFinal(course, course.targetGrade).needed).replace("--", ""),
           course.mode
         ]);
       });
