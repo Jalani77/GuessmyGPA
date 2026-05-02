@@ -18,9 +18,12 @@ export type Assignment = {
   categoryId?: string;
   earned: number | null;
   possible: number;
+  dueDate?: string;
+  graded?: boolean;
   extraCredit?: boolean;
   finalExam?: boolean;
   missing?: boolean;
+  source?: "manual" | "import" | "quick-category";
 };
 
 export type CourseGradeInput = {

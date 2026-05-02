@@ -96,9 +96,11 @@ export function parseGradebookText(text: string, source: ParsedGradebook["source
       categoryId,
       earned,
       possible,
+      graded: earned !== null,
       extraCredit: /extra credit/i.test(name) || possible === 0,
       finalExam: /final/i.test(name),
-      missing: earned === null
+      missing: earned === null,
+      source: "import"
     });
   });
 
@@ -127,7 +129,7 @@ export function parseSyllabusText(text: string): ParsedGradebook {
   const weightPattern = /^(.{3,80}?)\s+(\d+(?:\.\d+)?)\s*%$/gm;
   let match: RegExpExecArray | null;
   while ((match = weightPattern.exec(text)) !== null) {
-    const name = match[1].replace(/[-:•]/g, "").trim();
+    const name = match[1].replace(/[-:\u2022]/g, "").trim();
     const weight = Number(match[2]);
     if (name && Number.isFinite(weight)) categories.set(slug(name), { id: slug(name), name, weight });
   }

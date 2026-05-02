@@ -3,8 +3,8 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "GuessmyGPA",
-  description: "Import course grades and calculate current, projected, and final-exam outcomes honestly."
+  title: "GuessmyGPA | Honest Student Grade Calculator",
+  description: "A polished grade calculator for importing course data, editing assignments, and calculating current, projected, and final-exam outcomes with transparent math."
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
