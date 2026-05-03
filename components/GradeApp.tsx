@@ -16,11 +16,12 @@ import {
   Upload
 } from "lucide-react";
 import { calculateGrade } from "@/lib/grade-engine";
-import { Assignment, CourseGradeInput, defaultLetterScale, GradeCategory, LetterBoundary } from "@/lib/grade-types";
+import { Assignment, CourseGradeInput, defaultLetterScale, FinalNeed, GradeCategory, GradeResult, LetterBoundary } from "@/lib/grade-types";
 import { ImportWarning, parseGradebookText, parseSyllabusText } from "@/lib/import-parser";
 import pdfWorkerSrc from "pdfjs-dist/build/pdf.worker.mjs?url";
 
-type InputMode = "import" | "quick" | "manual";
+type InputMode = "quick" | "manual" | "import";
+type CompactMessage = { level: "warning" | "error"; message: string };
 
 const starterCategories: GradeCategory[] = [
   { id: "homework", name: "Homework", weight: 20 },
@@ -74,6 +75,7 @@ const cleanNumber = (value: string) => {
 const displayPercent = (value: number | null) => value === null ? "Need data" : `${value.toFixed(2)}%`;
 const displayShortPercent = (value: number | null) => value === null ? "Missing" : `${value.toFixed(1)}%`;
 const formatPoints = (value: number) => Number.isInteger(value) ? String(value) : value.toFixed(2);
+
 async function readPdfText(file: File) {
   const pdfjs = await import("pdfjs-dist");
   pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerSrc;
@@ -116,7 +118,7 @@ export default function GradeApp() {
   const [paste, setPaste] = useState("");
   const [warnings, setWarnings] = useState<ImportWarning[]>([]);
   const [busy, setBusy] = useState(false);
-  const [activeInput, setActiveInput] = useState<InputMode>("import");
+  const [activeInput, setActiveInput] = useState<InputMode>("quick");
   const [target, setTarget] = useState("90");
 
   const result = useMemo(() => calculateGrade(course), [course]);
@@ -132,7 +134,8 @@ export default function GradeApp() {
   const totalWeight = course.categories.reduce((sum, category) => sum + (category.weight ?? 0), 0);
   const gradedAssignments = course.assignments.filter((assignment) => assignment.earned !== null);
   const ungradedAssignments = course.assignments.filter((assignment) => assignment.earned === null);
-  const messages = [
+  const tableRows = course.assignments.filter((assignment) => assignment.source !== "quick-category");
+  const messages: CompactMessage[] = [
     ...warnings.map((warning) => ({ level: warning.level, message: warning.message })),
     ...result.warnings.map((message) => ({ level: "warning" as const, message })),
     ...result.assumptions.map((message) => ({ level: "warning" as const, message }))
@@ -270,12 +273,10 @@ export default function GradeApp() {
     });
   };
 
-  const tableRows = course.assignments.filter((assignment) => assignment.source !== "quick-category");
-
   return (
     <main className="app-shell">
       <header className="topbar">
-        <a className="wordmark" href="#top" aria-label="GuessmyGPA home">
+        <a className="wordmark" href="#workspace" aria-label="GuessmyGPA home">
           <span aria-hidden="true">G</span>
           GuessmyGPA
         </a>
@@ -286,240 +287,262 @@ export default function GradeApp() {
               <option>Current course</option>
             </select>
           </label>
-          <button className="text-button" type="button" onClick={() => setCourse(emptyCourse())}>
+          <button className="text-button" type="button" onClick={() => {
+            setCourse(emptyCourse());
+            setWarnings([]);
+            setPaste("");
+            setActiveInput("quick");
+          }}>
             Reset
           </button>
         </div>
       </header>
 
-      <section className="hero" id="top">
-        <div className="hero-copy">
+      <section className="workspace-intro" aria-label="Grade calculator purpose">
+        <div>
           <p className="eyebrow">Student grade calculator</p>
-          <h1>Know your grade before the semester ends.</h1>
-          <p>
-            Import a gradebook, enter category averages, or build the course by hand. Every result is calculated from your explicit inputs and shown with the math beside it.
-          </p>
+          <h1>Input grades, pick a target, see the final score you need.</h1>
         </div>
-        <div className="hero-facts" aria-label="Current course data status">
-          <div>
-            <span>{gradedAssignments.length}</span>
-            <p>graded inputs</p>
-          </div>
-          <div>
-            <span>{ungradedAssignments.length}</span>
-            <p>excluded or projected</p>
-          </div>
-          <div>
-            <span>{course.mode === "weighted" ? `${totalWeight}%` : "points"}</span>
-            <p>rubric basis</p>
-          </div>
+        <div className="status-pills" aria-label="Current course data status">
+          <span>{gradedAssignments.length} graded</span>
+          <span>{ungradedAssignments.length} ungraded</span>
+          <span>{course.mode === "weighted" ? `${totalWeight}% weights` : "points mode"}</span>
         </div>
       </section>
 
-      <section className="result-stage" aria-label="Current grade results">
-        <article className="grade-display">
-          <div className="grade-kicker">
-            <span>Current grade</span>
-            <strong>{result.currentLetter ?? "No letter yet"}</strong>
-          </div>
-          <p>{displayPercent(result.currentPercent)}</p>
-          <small>Based on graded work only. Ungraded items are excluded unless projection is enabled.</small>
-        </article>
-
-        <aside className="final-display" aria-label="Final exam calculator">
-          <div>
-            <p className="section-label">Final exam need</p>
-            <label className="target-control">
-              <span>Target course grade</span>
-              <input
-                value={target}
-                inputMode="decimal"
-                aria-label="Target course percentage"
-                onChange={(event) => setTarget(event.target.value)}
-              />
-              <b>%</b>
-            </label>
-          </div>
-          <strong>
-            {customNeed?.requiredFinalPercent === null || !customNeed
-              ? "Need final weight"
-              : `${customNeed.requiredFinalPercent.toFixed(2)}%`}
-          </strong>
-          <p>{customNeed?.reason ?? "Uses: target = current non-final grade x remaining weight + final score x final weight."}</p>
-        </aside>
-      </section>
-
-      {messages.length > 0 && (
-        <section className="message-strip" aria-live="polite">
-          {messages.map((message) => (
-            <p key={message.message} className={message.level === "error" ? "error" : ""}>
-              <AlertTriangle aria-hidden="true" size={16} />
-              {message.message}
-            </p>
-          ))}
-        </section>
-      )}
-
-      <section className="input-methods" aria-label="Choose how to enter grade data">
-        {[
-          { id: "import" as const, icon: Upload, title: "Import data", detail: "CSV, pasted tables, or syllabus/PDF rubric text." },
-          { id: "quick" as const, icon: SlidersHorizontal, title: "Quick categories", detail: "Enter category weights and averages in seconds." },
-          { id: "manual" as const, icon: BookOpen, title: "Manual assignments", detail: "Add, edit, and review every grade row." }
-        ].map((method) => {
-          const Icon = method.icon;
-          return (
-            <button
-              className={activeInput === method.id ? "method active" : "method"}
-              key={method.id}
-              type="button"
-              onClick={() => setActiveInput(method.id)}
-            >
-              <Icon aria-hidden="true" size={18} />
-              <span>{method.title}</span>
-              <p>{method.detail}</p>
-            </button>
-          );
-        })}
-      </section>
-
-      {activeInput === "import" && (
-        <section className="section-grid import-section" aria-labelledby="import-heading">
-          <div className="section-intro">
-            <p className="section-label">Import</p>
-            <h2 id="import-heading">Bring in the gradebook you already have.</h2>
-            <p>Parsing happens locally. Missing possible points, unclear weights, and locked PDFs are surfaced as warnings, never filled in silently.</p>
-          </div>
-          <div className="section-body">
-            <label className="dropzone">
-              {busy ? <Loader2 className="spin" aria-hidden="true" /> : <Upload aria-hidden="true" />}
-              <span>{busy ? "Reading file..." : "Upload CSV, TXT, TSV, or PDF"}</span>
-              <input accept=".csv,.txt,.tsv,.pdf,text/csv,application/pdf" type="file" onChange={handleFile} />
-            </label>
-            <label>
-              Paste gradebook table
-              <textarea
-                value={paste}
-                onChange={(event) => setPaste(event.target.value)}
-                placeholder={"Assignment, Category, Earned, Possible, Weight\nQuiz 1, Quizzes, 9, 10, 15"}
-              />
-            </label>
-            <div className="actions-row">
-              <button className="primary-button" type="button" disabled={!paste.trim() || busy} onClick={() => applyParsed(parseGradebookText(paste, "paste"))}>
-                Parse pasted data
-              </button>
-              <button className="secondary-button" type="button" onClick={() => applyParsed(parseSyllabusText(paste))} disabled={!paste.trim() || busy}>
-                Parse as syllabus rubric
-              </button>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {activeInput === "quick" && (
-        <section className="section-grid" aria-labelledby="quick-heading">
-          <div className="section-intro">
-            <p className="section-label">Quick setup</p>
-            <h2 id="quick-heading">Use category averages when assignment detail is unavailable.</h2>
-            <p>Each average is stored as an explicit 100-point input, so the formula remains inspectable.</p>
-          </div>
-          <div className="section-body">
-            <QuickCategoryTable
-              course={course}
-              onCategoryChange={updateCategory}
-              onAverageChange={setQuickAverage}
-              onRemove={removeCategory}
-              onAdd={addCategory}
-            />
-          </div>
-        </section>
-      )}
-
-      <section className="section-grid" aria-labelledby="manual-heading">
-        <div className="section-intro">
-          <p className="section-label">Manual entry</p>
-          <h2 id="manual-heading">Review imported rows or add assignments one by one.</h2>
-          <p>Ungraded rows stay out of the current grade. Mark a row graded only when the score is known.</p>
-        </div>
-        <div className="section-body">
-          <AssignmentTable
-            assignments={tableRows}
-            categories={course.categories}
-            onAdd={addAssignment}
-            onRemove={removeAssignment}
-            onChange={updateAssignment}
+      <section className="calculator-workspace" id="workspace" aria-label="Grade calculator workspace">
+        <div className="result-column">
+          <ResultSummary
+            result={result}
+            customNeed={customNeed}
+            target={target}
+            onTargetChange={setTarget}
+            course={course}
+            onCourseChange={updateCourse}
+            gradedCount={gradedAssignments.length}
+            ungradedCount={ungradedAssignments.length}
           />
+          <CompactWarnings messages={messages} />
         </div>
-      </section>
 
-      <section className="section-grid" aria-labelledby="rubric-heading">
-        <div className="section-intro">
-          <p className="section-label">Rubric</p>
-          <h2 id="rubric-heading">Control weights, drops, finals, and the letter scale.</h2>
-          <p>Switch between total-points and weighted-category math without changing the underlying grade rows.</p>
-        </div>
-        <div className="section-body rubric-grid">
-          <div className="control-panel">
-            <label>
-              Calculation mode
-              <select value={course.mode} onChange={(event) => updateCourse({ mode: event.target.value as CourseGradeInput["mode"] })}>
-                <option value="weighted">Weighted categories</option>
-                <option value="points">Total points</option>
-              </select>
-            </label>
-            <label>
-              Final exam weight
-              <input
-                value={course.finalExamWeight ?? ""}
-                inputMode="decimal"
-                placeholder="Unknown"
-                onChange={(event) => updateCourse({ finalExamWeight: cleanNumber(event.target.value) ?? undefined })}
+        <div className="input-column">
+          <InputModeTabs activeInput={activeInput} onChange={setActiveInput} />
+          <div className="input-panel">
+            {activeInput === "quick" && (
+              <QuickCategoryForm
+                course={course}
+                onCategoryChange={updateCategory}
+                onAverageChange={setQuickAverage}
+                onRemove={removeCategory}
+                onAdd={addCategory}
               />
-            </label>
-            <label className="check-row">
-              <input
-                type="checkbox"
-                checked={course.includeUngradedAsZero === true}
-                onChange={(event) => updateCourse({ includeUngradedAsZero: event.target.checked })}
+            )}
+            {activeInput === "manual" && (
+              <ManualAssignmentsPanel
+                assignments={tableRows}
+                categories={course.categories}
+                onAdd={addAssignment}
+                onRemove={removeAssignment}
+                onChange={updateAssignment}
               />
-              Count ungraded work as zero for projection
-            </label>
-          </div>
-          <div className="scale-panel">
-            <h3>Letter scale</h3>
-            {course.letterScale.map((boundary, index) => (
-              <div className="scale-row" key={`${boundary.letter}-${index}`}>
-                <input
-                  value={boundary.letter}
-                  aria-label={`Letter name ${index + 1}`}
-                  onChange={(event) => updateLetterScale(index, { letter: event.target.value })}
-                />
-                <input
-                  value={boundary.minimum}
-                  inputMode="decimal"
-                  aria-label={`${boundary.letter} minimum percentage`}
-                  onChange={(event) => updateLetterScale(index, { minimum: cleanNumber(event.target.value) ?? 0 })}
-                />
-              </div>
-            ))}
+            )}
+            {activeInput === "import" && (
+              <ImportPanel
+                busy={busy}
+                paste={paste}
+                onPasteChange={setPaste}
+                onFileChange={handleFile}
+                onParseGradebook={() => applyParsed(parseGradebookText(paste, "paste"))}
+                onParseSyllabus={() => applyParsed(parseSyllabusText(paste))}
+              />
+            )}
           </div>
         </div>
       </section>
 
-      <section className="section-grid explanation-section" aria-labelledby="math-heading">
-        <div className="section-intro">
-          <p className="section-label">Math</p>
-          <h2 id="math-heading">Transparent formulas, no invented values.</h2>
-          <p>These numbers update immediately from the rows above. Anything missing is shown as missing.</p>
-        </div>
-        <div className="section-body">
-          <ResultsExplanation course={course} target={target} />
-        </div>
-      </section>
+      <BreakdownDrawer
+        course={course}
+        result={result}
+        target={target}
+        onCourseChange={updateCourse}
+        onLetterScaleChange={updateLetterScale}
+      />
     </main>
   );
 }
 
-function QuickCategoryTable({
+function ResultSummary({
+  result,
+  customNeed,
+  target,
+  onTargetChange,
+  course,
+  onCourseChange,
+  gradedCount,
+  ungradedCount
+}: {
+  result: GradeResult;
+  customNeed: FinalNeed | null;
+  target: string;
+  onTargetChange: (value: string) => void;
+  course: CourseGradeInput;
+  onCourseChange: (patch: Partial<CourseGradeInput>) => void;
+  gradedCount: number;
+  ungradedCount: number;
+}) {
+  const needLabel = customNeed?.requiredFinalPercent === null || !customNeed
+    ? "Need final weight"
+    : `${customNeed.requiredFinalPercent.toFixed(2)}%`;
+
+  return (
+    <article className="result-card" aria-label="Current grade and final target">
+      <div className="result-card-head">
+        <div>
+          <p className="section-label">Live result</p>
+          <h2>Current standing</h2>
+        </div>
+        <strong className="letter-badge">{result.currentLetter ?? "--"}</strong>
+      </div>
+
+      <div className="grade-hero">
+        <span>Current grade</span>
+        <strong>{displayPercent(result.currentPercent)}</strong>
+        <p>Excludes ungraded work unless projection is enabled.</p>
+      </div>
+
+      <div className="need-card">
+        <div>
+          <span>Needed on final</span>
+          <strong>{needLabel}</strong>
+          <p>{customNeed?.reason ?? "Calculated from your target grade and final exam weight."}</p>
+        </div>
+        <label className="target-control compact-target">
+          <span>Target grade</span>
+          <input
+            value={target}
+            inputMode="decimal"
+            aria-label="Target course percentage"
+            onChange={(event) => onTargetChange(event.target.value)}
+          />
+          <b>%</b>
+        </label>
+      </div>
+
+      <div className="assumption-grid">
+        <label>
+          <span>Final weight</span>
+          <input
+            value={course.finalExamWeight ?? ""}
+            inputMode="decimal"
+            placeholder="Unknown"
+            aria-label="Final exam weight"
+            onChange={(event) => onCourseChange({ finalExamWeight: cleanNumber(event.target.value) ?? undefined })}
+          />
+        </label>
+        <label>
+          <span>Math mode</span>
+          <select value={course.mode} onChange={(event) => onCourseChange({ mode: event.target.value as CourseGradeInput["mode"] })}>
+            <option value="weighted">Weighted</option>
+            <option value="points">Points</option>
+          </select>
+        </label>
+      </div>
+
+      <div className="mini-breakdown" aria-label="Graded and ungraded counts">
+        <span>{gradedCount} graded inputs</span>
+        <span>{ungradedCount} excluded or projected</span>
+        <label className="mini-check">
+          <input
+            type="checkbox"
+            checked={course.includeUngradedAsZero === true}
+            onChange={(event) => onCourseChange({ includeUngradedAsZero: event.target.checked })}
+          />
+          Count ungraded as zero
+        </label>
+      </div>
+    </article>
+  );
+}
+
+function InputModeTabs({ activeInput, onChange }: { activeInput: InputMode; onChange: (mode: InputMode) => void }) {
+  const methods = [
+    { id: "quick" as const, icon: SlidersHorizontal, title: "Quick categories" },
+    { id: "manual" as const, icon: BookOpen, title: "Manual assignments" },
+    { id: "import" as const, icon: Upload, title: "Import" }
+  ];
+
+  return (
+    <div className="input-methods" role="tablist" aria-label="Choose how to enter grade data">
+      {methods.map((method) => {
+        const Icon = method.icon;
+        return (
+          <button
+            className={activeInput === method.id ? "method active" : "method"}
+            key={method.id}
+            type="button"
+            role="tab"
+            aria-selected={activeInput === method.id}
+            onClick={() => onChange(method.id)}
+          >
+            <Icon aria-hidden="true" size={16} />
+            <span>{method.title}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function ImportPanel({
+  busy,
+  paste,
+  onPasteChange,
+  onFileChange,
+  onParseGradebook,
+  onParseSyllabus
+}: {
+  busy: boolean;
+  paste: string;
+  onPasteChange: (value: string) => void;
+  onFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  onParseGradebook: () => void;
+  onParseSyllabus: () => void;
+}) {
+  return (
+    <section className="compact-panel import-panel" aria-labelledby="import-heading">
+      <div className="panel-title">
+        <p className="section-label">Import</p>
+        <h2 id="import-heading">Upload or paste grade data.</h2>
+        <p>CSV, pasted tables, or syllabus/PDF rubric text. Parsing stays local.</p>
+      </div>
+      <div className="import-grid">
+        <label className="dropzone">
+          {busy ? <Loader2 className="spin" aria-hidden="true" /> : <Upload aria-hidden="true" size={20} />}
+          <span>{busy ? "Reading file..." : "Upload CSV, TXT, TSV, or PDF"}</span>
+          <input accept=".csv,.txt,.tsv,.pdf,text/csv,application/pdf" type="file" onChange={onFileChange} />
+        </label>
+        <label>
+          Paste gradebook text
+          <textarea
+            value={paste}
+            onChange={(event) => onPasteChange(event.target.value)}
+            placeholder={"Assignment, Category, Earned, Possible, Weight\nQuiz 1, Quizzes, 9, 10, 15"}
+          />
+        </label>
+      </div>
+      <div className="actions-row">
+        <button className="primary-button" type="button" disabled={!paste.trim() || busy} onClick={onParseGradebook}>
+          Parse grades
+        </button>
+        <button className="secondary-button" type="button" onClick={onParseSyllabus} disabled={!paste.trim() || busy}>
+          Parse syllabus
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function QuickCategoryForm({
   course,
   onCategoryChange,
   onAverageChange,
@@ -533,55 +556,62 @@ function QuickCategoryTable({
   onAdd: () => void;
 }) {
   return (
-    <div className="editable-table">
-      <div className="table-head category-head">
-        <span>Category</span>
-        <span>Weight</span>
-        <span>Average</span>
-        <span>Drops</span>
-        <span />
+    <section className="compact-panel" aria-labelledby="quick-heading">
+      <div className="panel-title">
+        <p className="section-label">Fast input</p>
+        <h2 id="quick-heading">Enter category averages.</h2>
+        <p>Use this when you know each category average and weight.</p>
       </div>
-      {course.categories.map((category) => (
-        <div className="table-row category-row" key={category.id}>
-          <input
-            value={category.name}
-            aria-label="Category name"
-            onChange={(event) => onCategoryChange(category.id, { name: event.target.value })}
-          />
-          <input
-            value={category.weight ?? ""}
-            inputMode="decimal"
-            aria-label={`${category.name} weight`}
-            placeholder="%"
-            onChange={(event) => onCategoryChange(category.id, { weight: cleanNumber(event.target.value) ?? undefined })}
-          />
-          <input
-            value={categoryAverage(course, category.id) ?? ""}
-            inputMode="decimal"
-            aria-label={`${category.name} average`}
-            placeholder="Not known"
-            onChange={(event) => onAverageChange(category, event.target.value)}
-          />
-          <input
-            value={category.dropLowest ?? 0}
-            inputMode="numeric"
-            aria-label={`${category.name} drop lowest count`}
-            onChange={(event) => onCategoryChange(category.id, { dropLowest: cleanNumber(event.target.value) ?? 0 })}
-          />
-          <button className="icon-button" type="button" onClick={() => onRemove(category.id)} aria-label={`Remove ${category.name}`}>
-            <Trash2 aria-hidden="true" size={16} />
-          </button>
+      <div className="editable-table">
+        <div className="table-head category-head">
+          <span>Category</span>
+          <span>Weight</span>
+          <span>Average</span>
+          <span>Drops</span>
+          <span />
         </div>
-      ))}
+        {course.categories.map((category) => (
+          <div className="table-row category-row" key={category.id}>
+            <input
+              value={category.name}
+              aria-label="Category name"
+              onChange={(event) => onCategoryChange(category.id, { name: event.target.value })}
+            />
+            <input
+              value={category.weight ?? ""}
+              inputMode="decimal"
+              aria-label={`${category.name} weight`}
+              placeholder="%"
+              onChange={(event) => onCategoryChange(category.id, { weight: cleanNumber(event.target.value) ?? undefined })}
+            />
+            <input
+              value={categoryAverage(course, category.id) ?? ""}
+              inputMode="decimal"
+              aria-label={`${category.name} average`}
+              placeholder="Not known"
+              onChange={(event) => onAverageChange(category, event.target.value)}
+            />
+            <input
+              value={category.dropLowest ?? 0}
+              inputMode="numeric"
+              aria-label={`${category.name} drop lowest count`}
+              onChange={(event) => onCategoryChange(category.id, { dropLowest: cleanNumber(event.target.value) ?? 0 })}
+            />
+            <button className="icon-button" type="button" onClick={() => onRemove(category.id)} aria-label={`Remove ${category.name}`}>
+              <Trash2 aria-hidden="true" size={16} />
+            </button>
+          </div>
+        ))}
+      </div>
       <button className="secondary-button add-button" type="button" onClick={onAdd}>
         <Plus aria-hidden="true" size={16} />
         Add category
       </button>
-    </div>
+    </section>
   );
 }
 
-function AssignmentTable({
+function ManualAssignmentsPanel({
   assignments,
   categories,
   onAdd,
@@ -595,103 +625,150 @@ function AssignmentTable({
   onChange: (id: string, patch: Partial<Assignment>) => void;
 }) {
   return (
-    <div className="editable-table assignment-table">
-      <div className="table-head assignment-head">
-        <span>Assignment</span>
-        <span>Category</span>
-        <span>Earned</span>
-        <span>Possible</span>
-        <span>Status</span>
-        <span>Due</span>
-        <span>Flags</span>
-        <span />
+    <section className="compact-panel" aria-labelledby="manual-heading">
+      <div className="panel-title split-title">
+        <div>
+          <p className="section-label">Detailed input</p>
+          <h2 id="manual-heading">Manual assignments</h2>
+          <p>Rows stay contained here so results remain visible.</p>
+        </div>
+        <button className="secondary-button" type="button" onClick={onAdd}>
+          <Plus aria-hidden="true" size={16} />
+          Add row
+        </button>
       </div>
-      {assignments.length === 0 ? (
-        <div className="empty-state">
-          <FileText aria-hidden="true" />
-          <p>No assignment rows yet. Import a gradebook or add the first row manually.</p>
-        </div>
-      ) : assignments.map((assignment) => (
-        <div className="table-row assignment-row" key={assignment.id}>
-          <input
-            value={assignment.name}
-            aria-label="Assignment name"
-            onChange={(event) => onChange(assignment.id, { name: event.target.value })}
-          />
-          <select
-            value={assignment.categoryId ?? ""}
-            aria-label={`${assignment.name} category`}
-            onChange={(event) => onChange(assignment.id, { categoryId: event.target.value })}
-          >
-            <option value="">Uncategorized</option>
-            {categories.map((category) => <option value={category.id} key={category.id}>{category.name}</option>)}
-          </select>
-          <input
-            value={assignment.earned ?? ""}
-            inputMode="decimal"
-            aria-label={`${assignment.name} earned points`}
-            placeholder="Ungraded"
-            onChange={(event) => {
-              const earned = cleanNumber(event.target.value);
-              onChange(assignment.id, { earned, graded: earned !== null, missing: earned === null });
-            }}
-          />
-          <input
-            value={assignment.possible}
-            inputMode="decimal"
-            aria-label={`${assignment.name} possible points`}
-            onChange={(event) => onChange(assignment.id, { possible: cleanNumber(event.target.value) ?? 0 })}
-          />
-          <select
-            value={assignment.earned === null ? "ungraded" : "graded"}
-            aria-label={`${assignment.name} graded status`}
-            onChange={(event) => {
-              const graded = event.target.value === "graded";
-              onChange(assignment.id, { graded, earned: graded ? assignment.earned ?? 0 : null, missing: !graded });
-            }}
-          >
-            <option value="graded">Graded</option>
-            <option value="ungraded">Ungraded</option>
-          </select>
-          <input
-            type="date"
-            value={assignment.dueDate ?? ""}
-            aria-label={`${assignment.name} due date`}
-            onChange={(event) => onChange(assignment.id, { dueDate: event.target.value })}
-          />
-          <div className="flag-stack">
-            <label className="mini-check">
-              <input
-                type="checkbox"
-                checked={assignment.extraCredit === true}
-                onChange={(event) => onChange(assignment.id, { extraCredit: event.target.checked })}
-              />
-              Extra
-            </label>
-            <label className="mini-check">
-              <input
-                type="checkbox"
-                checked={assignment.finalExam === true}
-                onChange={(event) => onChange(assignment.id, { finalExam: event.target.checked })}
-              />
-              Final
-            </label>
+      <div className="table-scroll">
+        <div className="editable-table assignment-table">
+          <div className="table-head assignment-head">
+            <span>Assignment</span>
+            <span>Category</span>
+            <span>Earned</span>
+            <span>Possible</span>
+            <span>Status</span>
+            <span>Due</span>
+            <span>Flags</span>
+            <span />
           </div>
-          <button className="icon-button" type="button" onClick={() => onRemove(assignment.id)} aria-label={`Remove ${assignment.name}`}>
-            <Trash2 aria-hidden="true" size={16} />
-          </button>
+          {assignments.length === 0 ? (
+            <div className="empty-state">
+              <FileText aria-hidden="true" />
+              <p>No assignment rows yet. Import a gradebook or add the first row manually.</p>
+            </div>
+          ) : assignments.map((assignment) => (
+            <div className="table-row assignment-row" key={assignment.id}>
+              <input
+                value={assignment.name}
+                aria-label="Assignment name"
+                onChange={(event) => onChange(assignment.id, { name: event.target.value })}
+              />
+              <select
+                value={assignment.categoryId ?? ""}
+                aria-label={`${assignment.name} category`}
+                onChange={(event) => onChange(assignment.id, { categoryId: event.target.value })}
+              >
+                <option value="">Uncategorized</option>
+                {categories.map((category) => <option value={category.id} key={category.id}>{category.name}</option>)}
+              </select>
+              <input
+                value={assignment.earned ?? ""}
+                inputMode="decimal"
+                aria-label={`${assignment.name} earned points`}
+                placeholder="Ungraded"
+                onChange={(event) => {
+                  const earned = cleanNumber(event.target.value);
+                  onChange(assignment.id, { earned, graded: earned !== null, missing: earned === null });
+                }}
+              />
+              <input
+                value={assignment.possible}
+                inputMode="decimal"
+                aria-label={`${assignment.name} possible points`}
+                onChange={(event) => onChange(assignment.id, { possible: cleanNumber(event.target.value) ?? 0 })}
+              />
+              <select
+                value={assignment.earned === null ? "ungraded" : "graded"}
+                aria-label={`${assignment.name} graded status`}
+                onChange={(event) => {
+                  const graded = event.target.value === "graded";
+                  onChange(assignment.id, { graded, earned: graded ? assignment.earned ?? 0 : null, missing: !graded });
+                }}
+              >
+                <option value="graded">Graded</option>
+                <option value="ungraded">Ungraded</option>
+              </select>
+              <input
+                type="date"
+                value={assignment.dueDate ?? ""}
+                aria-label={`${assignment.name} due date`}
+                onChange={(event) => onChange(assignment.id, { dueDate: event.target.value })}
+              />
+              <div className="flag-stack">
+                <label className="mini-check">
+                  <input
+                    type="checkbox"
+                    checked={assignment.extraCredit === true}
+                    onChange={(event) => onChange(assignment.id, { extraCredit: event.target.checked })}
+                  />
+                  Extra
+                </label>
+                <label className="mini-check">
+                  <input
+                    type="checkbox"
+                    checked={assignment.finalExam === true}
+                    onChange={(event) => onChange(assignment.id, { finalExam: event.target.checked })}
+                  />
+                  Final
+                </label>
+              </div>
+              <button className="icon-button" type="button" onClick={() => onRemove(assignment.id)} aria-label={`Remove ${assignment.name}`}>
+                <Trash2 aria-hidden="true" size={16} />
+              </button>
+            </div>
+          ))}
         </div>
+      </div>
+    </section>
+  );
+}
+
+function CompactWarnings({ messages }: { messages: CompactMessage[] }) {
+  if (messages.length === 0) {
+    return (
+      <div className="message-strip success" aria-live="polite">
+        <p>
+          <CheckCircle2 aria-hidden="true" size={15} />
+          Results are based on explicit graded inputs.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="message-strip" aria-live="polite">
+      {messages.slice(0, 3).map((message) => (
+        <p key={message.message} className={message.level === "error" ? "error" : ""}>
+          <AlertTriangle aria-hidden="true" size={15} />
+          {message.message}
+        </p>
       ))}
-      <button className="secondary-button add-button" type="button" onClick={onAdd}>
-        <Plus aria-hidden="true" size={16} />
-        Add assignment
-      </button>
+      {messages.length > 3 && <p>+{messages.length - 3} more notes in details.</p>}
     </div>
   );
 }
 
-function ResultsExplanation({ course, target }: { course: CourseGradeInput; target: string }) {
-  const result = calculateGrade(course);
+function BreakdownDrawer({
+  course,
+  result,
+  target,
+  onCourseChange,
+  onLetterScaleChange
+}: {
+  course: CourseGradeInput;
+  result: GradeResult;
+  target: string;
+  onCourseChange: (patch: Partial<CourseGradeInput>) => void;
+  onLetterScaleChange: (index: number, patch: Partial<LetterBoundary>) => void;
+}) {
   const targetPercent = cleanNumber(target);
   const selectedNeed = targetPercent === null ? null : calculateGrade({
     ...course,
@@ -699,79 +776,88 @@ function ResultsExplanation({ course, target }: { course: CourseGradeInput; targ
   }).finalNeeds.find((need) => need.targetLetter === `${targetPercent}%`);
 
   return (
-    <div className="math-stack">
-      <div className="metric-grid">
-        <article>
-          <span>Current</span>
-          <strong>{displayPercent(result.currentPercent)}</strong>
-          <p>{result.currentLetter ?? "No letter yet"}</p>
-        </article>
-        <article>
-          <span>Projected</span>
-          <strong>{displayPercent(result.projectedPercent)}</strong>
-          <p>{result.projectedLetter ?? "No letter yet"}</p>
-        </article>
-        <article>
-          <span>Final for target</span>
-          <strong>{selectedNeed?.requiredFinalPercent === null || !selectedNeed ? "Need final weight" : `${selectedNeed.requiredFinalPercent.toFixed(2)}%`}</strong>
-          <p>{targetPercent === null ? "Enter a numeric target." : `${targetPercent}% course target`}</p>
-        </article>
-      </div>
-
-      <div className="formula-panel">
-        <div>
-          <Calculator aria-hidden="true" />
-          <h3>Current grade</h3>
-        </div>
-        <p>
-          {course.mode === "weighted"
-            ? "For each category: category percent = earned points / possible points. Current grade = sum(category percent x category weight) / sum(weights with graded work)."
-            : "Current grade = total earned graded points / total possible graded points."}
-        </p>
-        <p>Projection uses the same formula after counting ungraded rows as zero only when you enable that assumption.</p>
-      </div>
-
-      <div className="breakdown-list">
-        {result.categoryBreakdown.map((category) => (
-          <article key={category.categoryId}>
-            <div>
-              <h3>{category.name}</h3>
-              <p>
-                {formatPoints(category.earnedPoints)} / {formatPoints(category.possiblePoints)} points
-                {category.droppedAssignmentIds.length > 0 ? `, ${category.droppedAssignmentIds.length} dropped` : ""}
-                {category.ungradedCount > 0 ? `, ${category.ungradedCount} ungraded` : ""}
-              </p>
-            </div>
-            <strong>{displayShortPercent(category.percent)}</strong>
-            <span>{category.weight === null ? "points mode" : `${category.weight}% weight`}</span>
-          </article>
-        ))}
-      </div>
-
-      <div className="final-scenarios">
-        {result.finalNeeds.slice(0, 4).map((need) => (
-          <article key={need.targetLetter}>
-            <span>{need.targetLetter} at {need.targetPercent}%</span>
-            <strong>{need.requiredFinalPercent === null ? "Need final weight" : `${need.requiredFinalPercent.toFixed(2)}%`}</strong>
-            {need.reason && <p>{need.reason}</p>}
-          </article>
-        ))}
-      </div>
-
-      <details className="assumption-details">
-        <summary>
+    <details className="details-drawer">
+      <summary>
+        <span>
           <Info aria-hidden="true" size={16} />
-          Data assumptions and validation
-          <ChevronDown aria-hidden="true" size={16} />
-        </summary>
-        <div>
-          {result.warnings.length === 0 && result.assumptions.length === 0 ? (
-            <p><CheckCircle2 aria-hidden="true" size={16} /> No warnings. All current outputs are based on explicit graded inputs.</p>
-          ) : [...result.warnings, ...result.assumptions].map((message) => (
-            <p key={message}><AlertTriangle aria-hidden="true" size={16} /> {message}</p>
-          ))}
-        </div>
-      </details>
-    </div>
+          Show breakdown, letter scale, and formulas
+        </span>
+        <ChevronDown aria-hidden="true" size={16} />
+      </summary>
+      <div className="drawer-grid">
+        <section className="drawer-panel" aria-label="Category breakdown">
+          <h2>Breakdown</h2>
+          <div className="breakdown-list">
+            {result.categoryBreakdown.map((category) => (
+              <article key={category.categoryId}>
+                <div>
+                  <h3>{category.name}</h3>
+                  <p>
+                    {formatPoints(category.earnedPoints)} / {formatPoints(category.possiblePoints)} points
+                    {category.droppedAssignmentIds.length > 0 ? `, ${category.droppedAssignmentIds.length} dropped` : ""}
+                    {category.ungradedCount > 0 ? `, ${category.ungradedCount} ungraded` : ""}
+                  </p>
+                </div>
+                <strong>{displayShortPercent(category.percent)}</strong>
+                <span>{category.weight === null ? "points" : `${category.weight}%`}</span>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="drawer-panel" aria-label="Final scenarios and settings">
+          <h2>Final targets</h2>
+          <div className="final-scenarios">
+            {result.finalNeeds.slice(0, 4).map((need) => (
+              <article key={need.targetLetter} className={selectedNeed?.targetLetter === need.targetLetter ? "selected" : undefined}>
+                <span>{need.targetLetter} at {need.targetPercent}%</span>
+                <strong>{need.requiredFinalPercent === null ? "Need weight" : `${need.requiredFinalPercent.toFixed(2)}%`}</strong>
+                {need.reason && <p>{need.reason}</p>}
+              </article>
+            ))}
+          </div>
+          <div className="formula-panel">
+            <div>
+              <Calculator aria-hidden="true" size={16} />
+              <h3>Formula</h3>
+            </div>
+            <p>
+              {course.mode === "weighted"
+                ? "Current grade normalizes categories with graded work. Final need uses target = current non-final grade x remaining weight + final score x final weight."
+                : "Current grade = total earned graded points / total possible graded points. Final need uses the final exam weight when provided."}
+            </p>
+          </div>
+        </section>
+
+        <section className="drawer-panel" aria-label="Advanced rubric settings">
+          <h2>Advanced rubric</h2>
+          <div className="scale-panel compact-scale">
+            {course.letterScale.map((boundary, index) => (
+              <div className="scale-row" key={`${boundary.letter}-${index}`}>
+                <input
+                  value={boundary.letter}
+                  aria-label={`Letter name ${index + 1}`}
+                  onChange={(event) => onLetterScaleChange(index, { letter: event.target.value })}
+                />
+                <input
+                  value={boundary.minimum}
+                  inputMode="decimal"
+                  aria-label={`${boundary.letter} minimum percentage`}
+                  onChange={(event) => onLetterScaleChange(index, { minimum: cleanNumber(event.target.value) ?? 0 })}
+                />
+              </div>
+            ))}
+          </div>
+          <label className="check-row">
+            <input
+              type="checkbox"
+              checked={course.includeUngradedAsZero === true}
+              onChange={(event) => onCourseChange({ includeUngradedAsZero: event.target.checked })}
+            />
+            Count ungraded work as zero for projection
+          </label>
+        </section>
+      </div>
+    </details>
   );
 }
